@@ -406,6 +406,7 @@ class MarkdownGenerator:
 
     def _filter_nodes(self, nodes: list[CommandNode]) -> list[CommandNode]:
         """Keep root always; keep other nodes if any paragraph is relevant."""
+        assert self.relevance is not None
         kept = []
         for node in nodes:
             if node.depth == 0:
