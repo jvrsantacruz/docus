@@ -2,8 +2,31 @@
 name = "docus"
 version = "0.1.0"
 description = "CLI Documentation Extractor — generates Markdown from any CLI tool's --help output"
+readme = "README.md"
+license = "GPL-3.0-or-later"
+authors = [{name = "Javier Santacruz", email = "javier.santacruz@datadoghq.com"}]
 requires-python = ">=3.11"
 dependencies = []
+keywords = ["cli", "documentation", "markdown", "developer-tools", "llm"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Documentation",
+    "Topic :: Software Development :: Documentation",
+    "Topic :: Utilities",
+]
+
+[project.urls]
+Homepage = "https://github.com/jvrsantacruz/docus"
+Repository = "https://github.com/jvrsantacruz/docus"
+Issues = "https://github.com/jvrsantacruz/docus/issues"
 
 [project.scripts]
 docus = "docus:main"

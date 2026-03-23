@@ -1,0 +1,34 @@
+name: Publish
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  # Uncomment when ready to publish to PyPI.
+  # Requires a PyPI API token stored as PYPI_API_TOKEN in repository secrets,
+  # or trusted publishing configured at https://pypi.org/manage/account/publishing/
+  #
+  # publish:
+  #   needs: build
+  #   runs-on: ubuntu-latest
+  #   environment: pypi
+  #   permissions:
+  #     id-token: write
+  #   steps:
+  #     - uses: actions/download-artifact@v4
+  #       with:
+  #         name: dist
+  #         path: dist/
+  #     - uses: pypa/gh-action-pypi-publish@release/v1
