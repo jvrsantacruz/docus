@@ -8,8 +8,11 @@ external binary.  Run with:
 """
 
 import time
+import typing
 import unittest
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from docus import (
     CommandNode,
@@ -70,6 +73,8 @@ def _tree(children: dict[str, str] | None = None) -> CommandNode:
 # ---------------------------------------------------------------------------
 
 class TestSubcommandDetection(unittest.TestCase):
+    pytestmark = pytest.mark.file_output
+
 
     def test_cobra_style(self):
         text = (
@@ -111,6 +116,8 @@ class TestSubcommandDetection(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestExploration(unittest.TestCase):
+    pytestmark: typing.ClassVar = [pytest.mark.file_output, pytest.mark.depth_limit]
+
 
     def _x(self, **kw):
         return DocusExtractor(
@@ -183,6 +190,8 @@ class TestExploration(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestSubcommandEntryPoint(unittest.TestCase):
+    pytestmark: typing.ClassVar = [pytest.mark.entry_point, pytest.mark.depth_limit]
+
 
     def _x(self):
         return DocusExtractor(max_depth=3, max_workers=4, timeout=5)
@@ -237,6 +246,8 @@ class TestSubcommandEntryPoint(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestDocumentStructure(unittest.TestCase):
+    pytestmark = pytest.mark.file_output
+
 
     def test_index_lists_all_commands(self):
         root = _tree({"alpha": ALPHA_HELP, "beta": BETA_HELP})
@@ -268,6 +279,8 @@ class TestDocumentStructure(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestDeduplication(unittest.TestCase):
+    pytestmark = pytest.mark.deduplication
+
 
     def test_shared_paragraphs_appear_once_with_reference(self):
         root = _tree({
@@ -284,6 +297,8 @@ class TestDeduplication(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestRelevanceFilter(unittest.TestCase):
+    pytestmark = pytest.mark.like_filter
+
 
     def test_exact_match_passes(self):
         f = RelevanceFilter("patch")
@@ -334,6 +349,8 @@ _ROOT_PARA = "mycli — a tool for managing things in the repository environment
 
 
 class TestLikeFilter(unittest.TestCase):
+    pytestmark = pytest.mark.like_filter
+
 
     def _root_with_sub(self, sub_help: str) -> CommandNode:
         root = CommandNode(path=["mycli"], depth=0, help_text=_ROOT_PARA)

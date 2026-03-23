@@ -53,6 +53,14 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--cov=docus --cov-report=term-missing -p no:warnings"
+markers = [
+    "file_output: document a CLI tool to a Markdown file",
+    "stdout: print documentation to stdout without writing a file",
+    "entry_point: start the command tree at a subcommand entry point",
+    "depth_limit: limit subcommand recursion depth",
+    "like_filter: filter output to sections relevant to a search term",
+    "deduplication: deduplicate repeated paragraphs across commands",
+]
 
 [tool.ruff]
 line-length = 120

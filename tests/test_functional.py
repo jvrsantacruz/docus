@@ -12,6 +12,8 @@ compliant implementation by setting DOCUS_BIN:
 import os
 import subprocess
 
+import pytest
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -36,9 +38,10 @@ def _run(docus_bin, args, cwd=None, env=None):
 
 
 # ---------------------------------------------------------------------------
-# Output structure
+# Feature: document a CLI tool to a file
 # ---------------------------------------------------------------------------
 
+@pytest.mark.file_output
 def test_generates_heading_and_index(docus_bin, fake_cli, tmp_path):
     result = _run(docus_bin, ["--output", str(tmp_path / "out.md"), fake_cli])
     assert result.returncode == 0
@@ -47,6 +50,7 @@ def test_generates_heading_and_index(docus_bin, fake_cli, tmp_path):
     assert "## Index" in content
 
 
+@pytest.mark.file_output
 def test_index_contains_all_discovered_commands(docus_bin, fake_cli):
     result = _run(docus_bin, ["--stdout", fake_cli])
     assert result.returncode == 0
@@ -54,6 +58,7 @@ def test_index_contains_all_discovered_commands(docus_bin, fake_cli):
     assert "beta" in result.stdout
 
 
+@pytest.mark.file_output
 def test_each_command_has_its_own_section(docus_bin, fake_cli):
     result = _run(docus_bin, ["--stdout", fake_cli])
     assert result.returncode == 0
@@ -61,23 +66,7 @@ def test_each_command_has_its_own_section(docus_bin, fake_cli):
     assert "beta subcommand" in result.stdout.lower()
 
 
-# ---------------------------------------------------------------------------
-# Output modes
-# ---------------------------------------------------------------------------
-
-def test_stdout_flag_writes_markdown_to_stdout(docus_bin, fake_cli):
-    result = _run(docus_bin, ["--stdout", fake_cli])
-    assert result.returncode == 0
-    assert len(result.stdout) > 0
-    assert "fakecli" in result.stdout
-    assert result.stderr != ""  # progress written to stderr
-
-
-def test_stdout_flag_writes_no_file(docus_bin, fake_cli, tmp_path):
-    _run(docus_bin, ["--stdout", fake_cli], cwd=tmp_path)
-    assert not any(p.suffix == ".md" for p in tmp_path.iterdir())
-
-
+@pytest.mark.file_output
 def test_output_flag_writes_to_specified_path(docus_bin, fake_cli, tmp_path):
     out = tmp_path / "custom.md"
     result = _run(docus_bin, ["--output", str(out), fake_cli])
@@ -85,6 +74,7 @@ def test_output_flag_writes_to_specified_path(docus_bin, fake_cli, tmp_path):
     assert out.exists()
 
 
+@pytest.mark.file_output
 def test_default_output_filename_derived_from_command(docus_bin, fake_cli_factory, tmp_path):
     fake_cli_factory({(): "root help\n"}, name="fakecli")
     env = {**os.environ, "PATH": f"{tmp_path}:{os.environ.get('PATH', '')}"}
@@ -93,6 +83,7 @@ def test_default_output_filename_derived_from_command(docus_bin, fake_cli_factor
     assert (tmp_path / "fakecli.md").exists()
 
 
+@pytest.mark.file_output
 def test_multi_word_command_filename_uses_dashes(docus_bin, fake_cli_factory, tmp_path):
     fake_cli_factory({
         (): "root help\n\nAvailable Commands:\n  sub  Sub\n",
@@ -104,24 +95,49 @@ def test_multi_word_command_filename_uses_dashes(docus_bin, fake_cli_factory, tm
     assert (tmp_path / "mycli-sub.md").exists()
 
 
-# ---------------------------------------------------------------------------
-# Error handling
-# ---------------------------------------------------------------------------
-
+@pytest.mark.file_output
 def test_exit_nonzero_on_missing_command(docus_bin):
     result = _run(docus_bin, ["--stdout", "nonexistent_command_xyz_docus"])
     assert result.returncode != 0
 
 
+@pytest.mark.file_output
 def test_no_output_file_created_on_error(docus_bin, tmp_path):
     _run(docus_bin, ["nonexistent_command_xyz_docus"], cwd=tmp_path)
     assert not any(p.suffix == ".md" for p in tmp_path.iterdir())
 
 
 # ---------------------------------------------------------------------------
-# Subcommand entry point
+# Feature: print documentation to stdout
 # ---------------------------------------------------------------------------
 
+@pytest.mark.stdout
+def test_stdout_flag_writes_markdown_to_stdout(docus_bin, fake_cli):
+    result = _run(docus_bin, ["--stdout", fake_cli])
+    assert result.returncode == 0
+    assert len(result.stdout) > 0
+    assert "fakecli" in result.stdout
+    assert result.stderr != ""  # progress written to stderr
+
+
+@pytest.mark.stdout
+def test_stdout_flag_writes_no_file(docus_bin, fake_cli, tmp_path):
+    _run(docus_bin, ["--stdout", fake_cli], cwd=tmp_path)
+    assert not any(p.suffix == ".md" for p in tmp_path.iterdir())
+
+
+@pytest.mark.stdout
+def test_verbose_writes_progress_to_stderr(docus_bin, fake_cli):
+    result = _run(docus_bin, ["--stdout", "--verbose", fake_cli])
+    assert result.returncode == 0
+    assert "--help" in result.stderr
+
+
+# ---------------------------------------------------------------------------
+# Feature: subcommand entry point
+# ---------------------------------------------------------------------------
+
+@pytest.mark.entry_point
 def test_subcommand_entry_point_roots_at_given_command(docus_bin, fake_cli_factory, tmp_path):
     fake_cli_factory({
         (): "root\n\nAvailable Commands:\n  config  Config\n",
@@ -137,6 +153,7 @@ def test_subcommand_entry_point_roots_at_given_command(docus_bin, fake_cli_facto
     assert "set" in result.stdout
 
 
+@pytest.mark.entry_point
 def test_subcommand_entry_point_excludes_parent(docus_bin, fake_cli_factory, tmp_path):
     fake_cli_factory({
         (): "root help\n\nAvailable Commands:\n  sub  Sub\n",
@@ -146,7 +163,6 @@ def test_subcommand_entry_point_excludes_parent(docus_bin, fake_cli_factory, tmp
     env = {**os.environ, "PATH": f"{tmp_path}:{os.environ.get('PATH', '')}"}
     result = _run(docus_bin, ["--stdout", "mycli", "sub"], cwd=tmp_path, env=env)
     assert result.returncode == 0
-    # root heading should be "mycli sub", not a separate "mycli" section
     lines = result.stdout.splitlines()
     h1_lines = [ln for ln in lines if ln.startswith("# ")]
     assert len(h1_lines) == 1
@@ -154,9 +170,10 @@ def test_subcommand_entry_point_excludes_parent(docus_bin, fake_cli_factory, tmp
 
 
 # ---------------------------------------------------------------------------
-# Depth limiting
+# Feature: depth limiting
 # ---------------------------------------------------------------------------
 
+@pytest.mark.depth_limit
 def test_max_depth_limits_exploration(docus_bin, fake_cli_factory, tmp_path):
     fake_cli_factory({
         (): "root\n\nAvailable Commands:\n  alpha  Alpha\n",
@@ -172,7 +189,7 @@ def test_max_depth_limits_exploration(docus_bin, fake_cli_factory, tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# --like filter
+# Feature: --like filter
 # ---------------------------------------------------------------------------
 
 _PATCH_SECTION = (
@@ -189,6 +206,7 @@ _UNRELATED_SECTION = (
 )
 
 
+@pytest.mark.like_filter
 def test_like_filter_keeps_relevant_sections(docus_bin, fake_cli_factory):
     cli = fake_cli_factory({
         (): "root\n\nAvailable Commands:\n  add  Add\n  log  Log\n",
@@ -200,6 +218,7 @@ def test_like_filter_keeps_relevant_sections(docus_bin, fake_cli_factory):
     assert "add" in result.stdout
 
 
+@pytest.mark.like_filter
 def test_like_filter_excludes_irrelevant_sections(docus_bin, fake_cli_factory):
     cli = fake_cli_factory({
         (): "root\n\nAvailable Commands:\n  add  Add\n  log  Log\n",
@@ -211,6 +230,7 @@ def test_like_filter_excludes_irrelevant_sections(docus_bin, fake_cli_factory):
     assert "dry-run" not in result.stdout
 
 
+@pytest.mark.like_filter
 def test_like_filter_produces_shorter_output_than_full(docus_bin, fake_cli_factory):
     cli = fake_cli_factory({
         (): "root\n\nAvailable Commands:\n  add  Add\n  log  Log\n",
@@ -223,19 +243,10 @@ def test_like_filter_produces_shorter_output_than_full(docus_bin, fake_cli_facto
 
 
 # ---------------------------------------------------------------------------
-# Verbose flag
+# Feature: deduplication
 # ---------------------------------------------------------------------------
 
-def test_verbose_writes_progress_to_stderr(docus_bin, fake_cli):
-    result = _run(docus_bin, ["--stdout", "--verbose", fake_cli])
-    assert result.returncode == 0
-    assert "--help" in result.stderr
-
-
-# ---------------------------------------------------------------------------
-# Deduplication
-# ---------------------------------------------------------------------------
-
+@pytest.mark.deduplication
 def test_deduplication_replaces_repeated_content(docus_bin, fake_cli_factory):
     cli = fake_cli_factory({
         (): "root\n\nAvailable Commands:\n  alpha  Alpha\n  beta   Beta\n",
