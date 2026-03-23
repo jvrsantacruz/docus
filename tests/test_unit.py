@@ -1,26 +1,26 @@
 """
-Tests for docus.py — organised by feature area.
+Unit tests — exercise docus internals via Python import.
 
-Run:
-    make test
-    uv run pytest tests/test_docus.py -v
+These tests use mocks and direct class instantiation; they do not call any
+external binary.  Run with:
+
+    uv run pytest tests/test_unit.py -v
 """
 
-import concurrent.futures
-import io
-import os
-import subprocess
-import sys
 import time
 import unittest
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import docus
-from docus import CommandNode, DocusExtractor, MarkdownGenerator, RelevanceFilter, extract_subcommands
+from docus import (
+    CommandNode,
+    DocusExtractor,
+    MarkdownGenerator,
+    RelevanceFilter,
+    extract_subcommands,
+)
 
 # ---------------------------------------------------------------------------
-# Shared fixtures
+# Shared helpers
 # ---------------------------------------------------------------------------
 
 def _proc(stdout="", stderr=""):
@@ -66,7 +66,7 @@ def _tree(children: dict[str, str] | None = None) -> CommandNode:
 
 
 # ---------------------------------------------------------------------------
-# Feature: subcommand detection
+# Subcommand detection
 # ---------------------------------------------------------------------------
 
 class TestSubcommandDetection(unittest.TestCase):
@@ -90,8 +90,7 @@ class TestSubcommandDetection(unittest.TestCase):
             "work on the current change\n"
             "   add               Add file contents\n"
         )
-        result = extract_subcommands(text)
-        self.assertEqual(result, ["clone", "init", "add"])
+        self.assertEqual(extract_subcommands(text), ["clone", "init", "add"])
 
     def test_npm_comma_style(self):
         text = (
@@ -108,7 +107,7 @@ class TestSubcommandDetection(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# Feature: recursive exploration
+# Recursive exploration (BFS logic, mocked subprocess)
 # ---------------------------------------------------------------------------
 
 class TestExploration(unittest.TestCase):
@@ -175,106 +174,12 @@ class TestExploration(unittest.TestCase):
         mock_run.side_effect = slow
         t0 = time.monotonic()
         self._x(max_workers=10).explore(["mycli"])
-        # 6 calls × delay sequential = 0.30 s; parallel should be much less
+        # 6 calls × delay sequential = 0.30 s; parallel should finish faster
         self.assertLess(time.monotonic() - t0, 6 * delay * 0.8 + 0.3)
 
 
 # ---------------------------------------------------------------------------
-# Feature: document output
-# ---------------------------------------------------------------------------
-
-class TestOutput(unittest.TestCase):
-
-    @patch("subprocess.run")
-    def test_writes_file_with_heading_and_index(self, mock_run):
-        import tempfile
-        mock_run.return_value = _proc(stdout="Usage: mycli\n\nA tool.\n")
-        with tempfile.TemporaryDirectory() as d:
-            out = Path(d) / "mycli.md"
-            self.assertEqual(docus.main(["--output", str(out), "mycli"]), 0)
-            with open(out) as f:
-                content = f.read()
-            self.assertIn("# mycli", content)
-            self.assertIn("## Index", content)
-
-    @patch("subprocess.run")
-    def test_custom_output_path(self, mock_run):
-        import tempfile
-        mock_run.return_value = _proc(stdout="Usage: mycli\n\nA tool.\n")
-        with tempfile.TemporaryDirectory() as d:
-            out = Path(d) / "custom.md"
-            docus.main(["--output", str(out), "mycli"])
-            self.assertTrue(out.exists())
-
-    @patch("subprocess.run")
-    def test_stdout_flag(self, mock_run):
-        mock_run.return_value = _proc(stdout="Usage: mycli\n\nA tool.\n")
-        buf = io.StringIO()
-        sys.stdout, old = buf, sys.stdout
-        try:
-            ret = docus.main(["--stdout", "mycli"])
-        finally:
-            sys.stdout = old
-        self.assertEqual(ret, 0)
-        self.assertIn("# mycli", buf.getvalue())
-
-    @patch("subprocess.run")
-    def test_exits_nonzero_on_command_not_found(self, mock_run):
-        mock_run.side_effect = FileNotFoundError()
-        self.assertEqual(docus.main(["nonexistent"]), 1)
-
-
-# ---------------------------------------------------------------------------
-# Feature: document structure
-# ---------------------------------------------------------------------------
-
-class TestDocumentStructure(unittest.TestCase):
-
-    def test_index_lists_all_commands(self):
-        root = _tree({"alpha": ALPHA_HELP, "beta": BETA_HELP})
-        md = MarkdownGenerator(root).generate()
-        self.assertIn("`mycli`", md)
-        self.assertIn("`mycli alpha`", md)
-        self.assertIn("`mycli beta`", md)
-
-    def test_help_text_appears_in_output(self):
-        root = CommandNode(path=["mycli"], depth=0, help_text="some distinctive help text")
-        md = MarkdownGenerator(root).generate()
-        self.assertIn("some distinctive help text", md)
-
-    def test_no_help_text_noted(self):
-        root = _tree()
-        root.subcommands = [CommandNode(path=["mycli", "silent"], depth=1, help_text="")]
-        md = MarkdownGenerator(root).generate()
-        self.assertIn("No documentation available", md)
-
-    def test_error_noted_in_section(self):
-        root = CommandNode(path=["mycli"], depth=0, help_text="", error="command not found")
-        md = MarkdownGenerator(root).generate()
-        self.assertIn("Error", md)
-        self.assertIn("command not found", md)
-
-
-# ---------------------------------------------------------------------------
-# Feature: deduplication
-# ---------------------------------------------------------------------------
-
-class TestDeduplication(unittest.TestCase):
-
-    def test_shared_paragraphs_appear_once_with_reference(self):
-        root = _tree({
-            "alpha": f"Alpha subcommand.\n\n{GLOBAL_FLAGS}",
-            "beta":  f"Beta subcommand.\n\n{GLOBAL_FLAGS}",
-        })
-        md = MarkdownGenerator(root).generate()
-        # Full content appears exactly once
-        self.assertEqual(md.count("--config string"), 1)
-        # The other occurrence is a reference, not a repeat
-        self.assertIn("duplicate content", md)
-
-
-# ---------------------------------------------------------------------------
-# Feature: subcommand entry point
+# Subcommand entry point (BFS-level behaviour, mocked subprocess)
 # ---------------------------------------------------------------------------
 
 class TestSubcommandEntryPoint(unittest.TestCase):
@@ -298,7 +203,7 @@ class TestSubcommandEntryPoint(unittest.TestCase):
         self.assertIn("mycli config set", child_names)
 
     @patch("subprocess.run")
-    def test_parent_not_in_output(self, mock_run):
+    def test_parent_command_absent_from_output(self, mock_run):
         mock_run.side_effect = _responses({
             "mycli config --help": "Manage config.\n\nAvailable Commands:\n  get  Get\n",
             "mycli config get --help": "Get a value.\n",
@@ -309,20 +214,7 @@ class TestSubcommandEntryPoint(unittest.TestCase):
         self.assertNotIn("# mycli\n", md)
 
     @patch("subprocess.run")
-    def test_filename_uses_dashes(self, mock_run):
-        import tempfile
-        mock_run.return_value = _proc(stdout="Usage: git commit\n\nRecord changes.\n")
-        with tempfile.TemporaryDirectory() as d:
-            orig = Path.cwd()
-            os.chdir(d)
-            try:
-                docus.main(["git", "commit"])
-                self.assertTrue(Path("git-commit.md").exists())
-            finally:
-                os.chdir(orig)
-
-    @patch("subprocess.run")
-    def test_depth_relative_to_entry_point(self, mock_run):
+    def test_depth_is_relative_to_entry_point(self, mock_run):
         mock_run.side_effect = _responses({
             "mycli sub --help": "Sub.\n\nAvailable Commands:\n  child  Child\n",
             "mycli sub child --help": "Child.\n\nAvailable Commands:\n  leaf  Leaf\n",
@@ -336,12 +228,59 @@ class TestSubcommandEntryPoint(unittest.TestCase):
                 yield from all_names(c)
 
         cmds = set(all_names(root))
-        self.assertIn("mycli sub child", cmds)   # depth=1, within limit
-        self.assertNotIn("mycli sub child leaf", cmds)  # depth=2, beyond limit
+        self.assertIn("mycli sub child", cmds)        # depth 1 — within limit
+        self.assertNotIn("mycli sub child leaf", cmds) # depth 2 — beyond limit
 
 
 # ---------------------------------------------------------------------------
-# Feature: relevance filter scoring
+# Document structure
+# ---------------------------------------------------------------------------
+
+class TestDocumentStructure(unittest.TestCase):
+
+    def test_index_lists_all_commands(self):
+        root = _tree({"alpha": ALPHA_HELP, "beta": BETA_HELP})
+        md = MarkdownGenerator(root).generate()
+        self.assertIn("`mycli`", md)
+        self.assertIn("`mycli alpha`", md)
+        self.assertIn("`mycli beta`", md)
+
+    def test_help_text_appears_in_output(self):
+        root = CommandNode(path=["mycli"], depth=0, help_text="some distinctive help text")
+        md = MarkdownGenerator(root).generate()
+        self.assertIn("some distinctive help text", md)
+
+    def test_missing_help_text_noted(self):
+        root = _tree()
+        root.subcommands = [CommandNode(path=["mycli", "silent"], depth=1, help_text="")]
+        md = MarkdownGenerator(root).generate()
+        self.assertIn("No documentation available", md)
+
+    def test_error_noted_in_section(self):
+        root = CommandNode(path=["mycli"], depth=0, help_text="", error="command not found")
+        md = MarkdownGenerator(root).generate()
+        self.assertIn("Error", md)
+        self.assertIn("command not found", md)
+
+
+# ---------------------------------------------------------------------------
+# Deduplication
+# ---------------------------------------------------------------------------
+
+class TestDeduplication(unittest.TestCase):
+
+    def test_shared_paragraphs_appear_once_with_reference(self):
+        root = _tree({
+            "alpha": f"Alpha subcommand.\n\n{GLOBAL_FLAGS}",
+            "beta":  f"Beta subcommand.\n\n{GLOBAL_FLAGS}",
+        })
+        md = MarkdownGenerator(root).generate()
+        self.assertEqual(md.count("--config string"), 1)
+        self.assertIn("duplicate content", md)
+
+
+# ---------------------------------------------------------------------------
+# Relevance filter scoring
 # ---------------------------------------------------------------------------
 
 class TestRelevanceFilter(unittest.TestCase):
@@ -368,17 +307,15 @@ class TestRelevanceFilter(unittest.TestCase):
 
     def test_custom_threshold_respected(self):
         f = RelevanceFilter("patch", threshold=4.0)
-        # exact match scores 3.0, below new threshold
         self.assertFalse(f.is_relevant("Apply a patch to the tree."))
 
     def test_short_unrelated_words_ignored(self):
         f = RelevanceFilter("patch")
-        # words shorter than 4 chars are skipped in difflib check
         self.assertFalse(f.is_relevant("run add rm set git log ref tag"))
 
 
 # ---------------------------------------------------------------------------
-# Feature: --like filter in MarkdownGenerator
+# --like filter in MarkdownGenerator
 # ---------------------------------------------------------------------------
 
 _PATCH_PARA = (
@@ -410,8 +347,7 @@ class TestLikeFilter(unittest.TestCase):
         md = MarkdownGenerator(root, relevance=rf).generate()
         self.assertIn("patch", md.lower())
 
-    def test_unrelated_paragraph_excluded(self):
-        # sub only has unrelated content → node filtered out
+    def test_irrelevant_node_excluded(self):
         root = self._root_with_sub(_UNRELATED_PARA)
         rf = RelevanceFilter("patch")
         md = MarkdownGenerator(root, relevance=rf).generate()
@@ -425,12 +361,8 @@ class TestLikeFilter(unittest.TestCase):
 
     def test_index_contains_only_relevant_nodes(self):
         root = CommandNode(path=["mycli"], depth=0, help_text=_ROOT_PARA)
-        root.subcommands.append(
-            CommandNode(path=["mycli", "add"], depth=1, help_text=_PATCH_PARA)
-        )
-        root.subcommands.append(
-            CommandNode(path=["mycli", "log"], depth=1, help_text=_UNRELATED_PARA)
-        )
+        root.subcommands.append(CommandNode(path=["mycli", "add"], depth=1, help_text=_PATCH_PARA))
+        root.subcommands.append(CommandNode(path=["mycli", "log"], depth=1, help_text=_UNRELATED_PARA))
         rf = RelevanceFilter("patch")
         md = MarkdownGenerator(root, relevance=rf).generate()
         self.assertIn("`mycli add`", md)
@@ -438,57 +370,9 @@ class TestLikeFilter(unittest.TestCase):
 
     def test_no_like_gives_full_output(self):
         root = CommandNode(path=["mycli"], depth=0, help_text=_ROOT_PARA)
-        root.subcommands.append(
-            CommandNode(path=["mycli", "add"], depth=1, help_text=_PATCH_PARA)
-        )
-        root.subcommands.append(
-            CommandNode(path=["mycli", "log"], depth=1, help_text=_UNRELATED_PARA)
-        )
+        root.subcommands.append(CommandNode(path=["mycli", "add"], depth=1, help_text=_PATCH_PARA))
+        root.subcommands.append(CommandNode(path=["mycli", "log"], depth=1, help_text=_UNRELATED_PARA))
         md_full = MarkdownGenerator(root).generate()
         md_like = MarkdownGenerator(root, relevance=RelevanceFilter("patch")).generate()
-        # Full output has more content than filtered
         self.assertGreater(len(md_full), len(md_like))
-        # Full output contains both subcommands
         self.assertIn("`mycli log`", md_full)
-
-
-# ---------------------------------------------------------------------------
-# Parallel runner
-# ---------------------------------------------------------------------------
-
-_TEST_CLASSES = [
-    TestSubcommandDetection,
-    TestExploration,
-    TestOutput,
-    TestDocumentStructure,
-    TestDeduplication,
-    TestSubcommandEntryPoint,
-    TestRelevanceFilter,
-    TestLikeFilter,
-]
-
-if __name__ == "__main__":
-    this_file = str(Path(__file__).resolve())
-    class_names = {cls.__name__ for cls in _TEST_CLASSES}
-
-    # Subprocess dispatch: run a single named class
-    if len(sys.argv) == 2 and sys.argv[1] in class_names:
-        unittest.main(defaultTest=sys.argv[1], argv=[sys.argv[0]], verbosity=2)
-        sys.exit()
-
-    # Parallel mode: one subprocess per test class, coordinated via threads
-    def _run(name):
-        r = subprocess.run(
-            [sys.executable, this_file, name],
-            capture_output=True, text=True,
-        )
-        return name, r.returncode, r.stdout + r.stderr
-
-    failures = 0
-    with concurrent.futures.ThreadPoolExecutor() as ex:
-        for _name, rc, out in ex.map(_run, [c.__name__ for c in _TEST_CLASSES]):
-            print(out, end="")
-            if rc != 0:
-                failures += 1
-
-    sys.exit(min(failures, 1))
