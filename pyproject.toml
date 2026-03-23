@@ -1,0 +1,66 @@
+[project]
+name = "docus"
+version = "0.1.0"
+description = "CLI Documentation Extractor — generates Markdown from any CLI tool's --help output"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+docus = "docus:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+include = ["docus.py"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=6.0",
+    "ruff>=0.9",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=docus --cov-report=term-missing -p no:warnings"
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "D",      # docstrings — not enforced
+    "ANN",    # type annotations — not enforced yet
+    "COM812", # trailing comma — conflicts with formatter
+    "ISC001", # implicit string concat — conflicts with formatter
+    "T201",   # print() — intentional in CLI
+    "S",      # security — not applicable to this CLI tool
+    "EM",     # exception message strings — minor style
+    "TRY003", # long exception messages — minor style
+    "BLE001", # bare except Exception — intentional in thread executor
+    # Complexity limits — functions are intentionally dense
+    "C901", "PLR0911", "PLR0912", "PLR0913", "PLR0915",
+    # Boolean arguments — acceptable in CLI/config design
+    "FBT001", "FBT002", "FBT003",
+    # Magic value comparisons — constants would add noise without benefit
+    "PLR2004",
+    # subprocess without check= — intentional
+    "PLW1510",
+    # Redefined loop variable — intentional in npm token parser
+    "PLW2901",
+    # Path.open vs open() — minor style preference
+    "PTH123",
+    # Pytest: unittest-style assertions — keep for consistency with test class style
+    "PT009",
+    # Imports outside top-level — lazy imports in test methods
+    "PLC0415",
+    # Commented-out code detection — false-positive on section separator comments
+    "ERA001",
+    # Ambiguous unicode in docstrings/comments — intentional (—, →)
+    "RUF001", "RUF002", "RUF003",
+    # Typing-only imports — structural choice
+    "TC001", "TC003",
+]
