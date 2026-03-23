@@ -10,3 +10,4 @@ htmlcov/
 .ruff_cache/
 *.md
 !README.md
+!CLAUDE.md
